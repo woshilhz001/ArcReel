@@ -108,6 +108,9 @@ class ProviderConfigResponse(BaseModel):
     status: str
     media_types: list[str]
     fields: list[FieldInfo]
+    # 该供应商凭证是否接受自定义 base_url（真相源：optional_keys 含 base_url）。
+    # base_url 随凭证走、不进 fields，前端据此决定是否在密钥表单渲染 URL 输入。
+    supports_base_url: bool
 
 
 class ConnectionTestResponse(BaseModel):
@@ -286,6 +289,7 @@ async def get_provider_config(
         status=status,
         media_types=list(meta.media_types),
         fields=fields,
+        supports_base_url="base_url" in meta.optional_keys,
     )
 
 
@@ -622,6 +626,29 @@ def _test_vidu(config: dict[str, str], _t: Callable[..., str]) -> ConnectionTest
     )
 
 
+def _test_dashscope(config: dict[str, str], _t: Callable[..., str]) -> ConnectionTestResponse:
+    """通过 models.list() 验证 DashScope API Key（compatible-mode，OpenAI 协议）。
+
+    与 custom_provider 模型发现走同一 OpenAI 兼容机制；base_url 经 dashscope_text_base_url
+    派生 {host}/compatible-mode/v1，容忍用户填 host 或带任一后缀。
+    """
+    from openai import OpenAI
+
+    from lib.dashscope_shared import dashscope_text_base_url
+
+    client = OpenAI(
+        api_key=config["api_key"],
+        base_url=dashscope_text_base_url(config.get("base_url")),
+    )
+    models = client.models.list()
+    available = sorted(m.id for m in models.data if "qwen" in m.id.lower() or "wan" in m.id.lower())
+    return ConnectionTestResponse(
+        success=True,
+        available_models=available,
+        message=_t("connection_success"),
+    )
+
+
 _TEST_DISPATCH: dict[str, Callable[[dict[str, str], Any], ConnectionTestResponse]] = {
     "gemini-aistudio": _test_gemini_aistudio,
     "gemini-vertex": _test_gemini_vertex,
@@ -630,6 +657,7 @@ _TEST_DISPATCH: dict[str, Callable[[dict[str, str], Any], ConnectionTestResponse
     "grok": _test_grok,
     "openai": _test_openai,
     "vidu": _test_vidu,
+    "dashscope": _test_dashscope,
 }
 
 

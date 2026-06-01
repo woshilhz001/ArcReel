@@ -28,13 +28,15 @@ class TestRegistry:
             "v2-video-generations",
             "ark-seedance",
             "vidu-video",
+            "dashscope-image",
+            "dashscope-async-video",
         }
 
     def test_each_spec_has_required_fields(self):
         for key, spec in ENDPOINT_REGISTRY.items():
             assert spec.key == key
             assert spec.media_type in {"text", "image", "video"}
-            assert spec.family in {"openai", "google", "newapi", "v2", "ark", "vidu"}
+            assert spec.family in {"openai", "google", "newapi", "v2", "ark", "vidu", "dashscope"}
             assert spec.display_name_key.startswith("endpoint_")
             assert callable(spec.build_backend)
             assert spec.request_method == "POST"
@@ -57,8 +59,8 @@ class TestRegistry:
         }
 
     def test_new_video_endpoints_have_unset_cap(self):
-        """v2/ark/vidu 不在 endpoint 维度声明上限，由 resolver 调 backend 纯 caps 函数读取。"""
-        for key in ("v2-video-generations", "ark-seedance", "vidu-video"):
+        """v2/ark/vidu/dashscope 不在 endpoint 维度声明上限，由 resolver 调 backend 纯 caps 函数读取。"""
+        for key in ("v2-video-generations", "ark-seedance", "vidu-video", "dashscope-async-video"):
             assert ENDPOINT_REGISTRY[key].video_max_reference_images is None
         # 既有显式 int 保留，行为零变化
         assert ENDPOINT_REGISTRY["openai-video"].video_max_reference_images == 1
@@ -70,12 +72,20 @@ class TestRegistry:
         全注册表 XOR/非负不变式由 endpoints.py 的 module-load `_validate_video_caps_declarations()`
         在 import 期保证（违反则本文件根本 import 不进来），故此处只断言「具体哪个 endpoint 选了哪条
         路径」——这是 XOR 校验抓不到的（换机制仍满足 XOR），是真正的回归护栏。"""
-        # None-cap 的三个 video endpoint 必须绑定纯 caps 函数
-        for key in ("v2-video-generations", "ark-seedance", "vidu-video"):
+        # None-cap 的 video endpoint 必须绑定纯 caps 函数
+        for key in ("v2-video-generations", "ark-seedance", "vidu-video", "dashscope-async-video"):
             assert ENDPOINT_REGISTRY[key].video_caps_for_model is not None
         # 显式 int 的 video endpoint 不应再绑 caps 函数
         for key in ("openai-video", "newapi-video"):
             assert ENDPOINT_REGISTRY[key].video_caps_for_model is None
+
+    def test_dashscope_caps_fn_reads_per_model_limit_without_client(self):
+        """dashscope-async-video 的 caps_fn 是纯函数：按 model_id 返回真实参考图上限
+        （happyhorse-r2v=9 / wan2.7-r2v=5），resolver 据此解析而无需构造 backend / api_key。"""
+        caps_fn = ENDPOINT_REGISTRY["dashscope-async-video"].video_caps_for_model
+        assert caps_fn is not None
+        assert caps_fn("happyhorse-1.0-r2v").max_reference_images == 9
+        assert caps_fn("wan2.7-r2v").max_reference_images == 5
 
     def test_negative_int_cap_rejected_at_validation(self, monkeypatch: pytest.MonkeyPatch):
         """import 期不变式拒绝负数 int cap：下游 references[:-1] 会误丢最后一张而非裁成 0 张。"""
@@ -112,8 +122,21 @@ class TestRegistry:
         image_keys = {s.key for s in ENDPOINT_REGISTRY.values() if s.media_type == "image"}
         video_keys = {s.key for s in ENDPOINT_REGISTRY.values() if s.media_type == "video"}
         assert text_keys == {"openai-chat", "gemini-generate"}
-        assert image_keys == {"openai-images", "openai-images-generations", "openai-images-edits", "gemini-image"}
-        assert video_keys == {"openai-video", "newapi-video", "v2-video-generations", "ark-seedance", "vidu-video"}
+        assert image_keys == {
+            "openai-images",
+            "openai-images-generations",
+            "openai-images-edits",
+            "gemini-image",
+            "dashscope-image",
+        }
+        assert video_keys == {
+            "openai-video",
+            "newapi-video",
+            "v2-video-generations",
+            "ark-seedance",
+            "vidu-video",
+            "dashscope-async-video",
+        }
 
 
 class TestHelpers:
@@ -210,11 +233,17 @@ class TestInferEndpoint:
         assert infer_endpoint(model_id, discovery_format) != "v2-video-generations"
 
 
-def test_image_endpoint_registry_has_four_entries():
+def test_image_endpoint_registry_entries():
     from lib.custom_provider.endpoints import ENDPOINT_KEYS_BY_MEDIA_TYPE
 
     image_keys = set(ENDPOINT_KEYS_BY_MEDIA_TYPE["image"])
-    assert image_keys == {"openai-images", "openai-images-generations", "openai-images-edits", "gemini-image"}
+    assert image_keys == {
+        "openai-images",
+        "openai-images-generations",
+        "openai-images-edits",
+        "gemini-image",
+        "dashscope-image",
+    }
 
 
 def test_split_endpoints_have_single_capability():
