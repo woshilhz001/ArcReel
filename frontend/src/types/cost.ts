@@ -9,6 +9,7 @@ export interface CostByType {
   characters?: CostBreakdown;
   scenes?: CostBreakdown;
   props?: CostBreakdown;
+  products?: CostBreakdown;
 }
 
 /** 单个 segment 的费用 */

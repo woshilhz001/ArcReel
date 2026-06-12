@@ -68,6 +68,10 @@ class GeneratePropRequest(BaseModel):
     prompt: str
 
 
+class GenerateProductRequest(BaseModel):
+    prompt: str
+
+
 # ==================== 分镜图生成 ====================
 
 
@@ -412,7 +416,7 @@ async def generate_tts_batch(
         raise HTTPException(status_code=500, detail=_t("internal_server_error"))
 
 
-# ==================== 资产设计图生成（character / scene / prop 共用） ====================
+# ==================== 资产设计图生成（character / scene / prop / product 共用） ====================
 
 
 # i18n key 命名差异：scene 用历史前缀 "project_scene_*"
@@ -420,6 +424,7 @@ _ASSET_GENERATE_I18N: dict[str, dict[str, str]] = {
     "character": {"not_found": "character_not_found", "submitted": "character_task_submitted"},
     "scene": {"not_found": "project_scene_not_found", "submitted": "scene_task_submitted"},
     "prop": {"not_found": "prop_not_found", "submitted": "prop_task_submitted"},
+    "product": {"not_found": "product_not_found", "submitted": "product_task_submitted"},
 }
 
 
@@ -432,7 +437,7 @@ async def _enqueue_asset_generation(
     user_id: str,
     _t: Translator,
 ) -> dict:
-    """三类资产（character / scene / prop）设计图生成共用入队逻辑。"""
+    """项目级资产（character / scene / prop / product）设计图生成共用入队逻辑。"""
     spec = ASSET_SPECS[asset_type]
     keys = _ASSET_GENERATE_I18N[asset_type]
 
@@ -539,6 +544,33 @@ async def generate_prop(
             asset_type="prop",
             project_name=project_name,
             resource_name=prop_name,
+            prompt=req.prompt,
+            user_id=_user.id,
+            _t=_t,
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("请求处理失败")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/projects/{project_name}/generate/product/{product_name}")
+async def generate_product(
+    project_name: str,
+    product_name: str,
+    req: GenerateProductRequest,
+    _user: CurrentUser,
+    _t: Translator,
+):
+    """提交产品标准参考图（product sheet）生成任务到队列，立即返回 task_id。"""
+    try:
+        return await _enqueue_asset_generation(
+            asset_type="product",
+            project_name=project_name,
+            resource_name=product_name,
             prompt=req.prompt,
             user_id=_user.id,
             _t=_t,
