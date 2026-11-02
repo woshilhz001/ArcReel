@@ -80,4 +80,8 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD curl -f http://localhost:1241/health || exit 1
 
 # 启动命令
-CMD ["uv", "run", "uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "1241"]
+# --timeout-keep-alive 300：调大 keep-alive 窗口（uvicorn 默认仅 5s）。
+# 客户端（ComfyUI 插件）已实现共享 keep-alive 连接 + 锁；服务端窗口过短
+# 会在操作空档（>5s）关闭连接，客户端被迫重建 TCP（Windows Docker HNS
+# 建连实测 ~21s）。调大到 300s 后正常操作间隔内连接保持存活，消除反复建连。
+CMD ["uv", "run", "uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "1241", "--timeout-keep-alive", "300"]

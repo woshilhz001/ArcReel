@@ -339,7 +339,9 @@ def _apply_media(
     """填入本次带上的素材，并把没有素材可填的读图节点连同下游一并删掉。
 
     首尾帧与参考图都是「绑定了但这次没给值」就要改图：读图节点留在图里会按 workflow 的字面
-    文件名去读一张上次的图，模型照着它出片，用户看到的是一张自己没选过的首帧。
+    文件名去读一张上次的图，模型照着它出片，用户看到的是一张自己没选过的首帧。文件名字面值
+    为空的读图节点另行处理（见 :func:`_empty_name_loaders`）：空名提交必是整笔远端失败，
+    与绑没绑定、给没给值都无关。
     """
     doomed: list[str] = []
     for key, value in (("start_image", media.start_image), ("end_image", media.end_image)):
@@ -351,9 +353,37 @@ def _apply_media(
     doomed.extend(
         _apply_reference_images(workflow, _targets(bindings.get("reference_images")), media.reference_images, rules)
     )
+    doomed.extend(_empty_name_loaders(workflow, rules))
     if not doomed:
         return ()
     return _drop_nodes(workflow, doomed, output_nodes=_output_nodes(bindings), rules=rules)
+
+
+def _empty_name_loaders(workflow: Mapping[str, Any], rules: InferenceRules) -> list[str]:
+    """文件名字面值为空的读图节点 id。
+
+    空文件名提交上去必是一次远端执行错误：ComfyUI 拿它 join 出 ``input`` 目录本身，打开目录
+    在 Windows 上是 ``[Errno 13] Permission denied``、在 POSIX 上是 ``IsADirectoryError``——
+    不是构图偏一点，是整笔生成报废，出错节点还会被记成 ``LoadImage`` 让人以为机器权限坏了。
+
+    判据只看空不空，不看绑没绑定：填值与「保持底稿字面值」只对非空底稿有意义（读出来仍是张
+    图），空底稿没有任何可保留的语义，删掉不改变有效构图。键缺失与空串同处理，它在提交期同样
+    必被拒。字面值是连线的跳过——那由上游给值，不是文件名。处置落在 :func:`_drop_nodes`：
+    下游入口摘键、级联、产物保护一并生效。
+    """
+    empty: list[str] = []
+    for node_id, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        loader_input = rules.loader_input(str(node.get("class_type") or ""))
+        if loader_input is None:
+            continue
+        raw = node_inputs(node).get(loader_input)
+        if _as_link(raw) is not None:
+            continue
+        if raw is None or not str(raw).strip():
+            empty.append(node_id)
+    return empty
 
 
 def _apply_reference_images(
@@ -377,16 +407,45 @@ def _apply_reference_images(
     spare = targets[filled:]
     if not spare:
         return []
-    if any(not _adjustable(target, rules) for target in spare):
-        logger.info("参考图格子 %d 个、本次 %d 张，但有格子的 consumer 改不动图，改图跳过", len(targets), len(values))
+    if any(not _all_consumers_adjustable(workflow, target, rules) for target in spare):
+        logger.info(
+            "参考图格子 %d 个、本次 %d 张，但有格子的下游 consumer 改不动图，改图跳过", len(targets), len(values)
+        )
         if values:
             _write_all(workflow, spare, values[-1])
         return []
     return [str(target["node"]) for target in spare]
 
 
+def _all_consumers_adjustable(workflow: dict[str, Any], target: Mapping[str, Any], rules: InferenceRules) -> bool:
+    """这个参考图格子的全部实际下游消费者在张数变少时都改得动图吗。
+
+    不仅检查 binding 记录的 ``consumer``，还扫描 workflow 图中所有引用该读图节点的下游：
+    任一不可调（不在 ``optional_inputs`` 也不在 ``merge_nodes``）就返回 ``False``，
+    退回重复最后一张——宁可构图偏了也不凭猜测把一个必需输入摘掉、让 ComfyUI 在提交时报
+    ``node_errors``。
+    """
+    # 先检查 binding 记录的 consumer（原有逻辑）
+    if not _adjustable(target, rules):
+        return False
+    # 再扫描 workflow 图中该节点的全部实际下游消费者
+    node_id = str(target["node"])
+    for other_id, other in workflow.items():
+        if other_id == node_id or not isinstance(other, dict):
+            continue
+        inputs = other.get("inputs")
+        if not isinstance(inputs, dict):
+            continue
+        for name, raw in inputs.items():
+            if _refers_to(raw, node_id):
+                class_type = str(other.get("class_type") or "")
+                if not rules.adjustable_input(class_type, name):
+                    return False
+    return True
+
+
 def _adjustable(target: Mapping[str, Any], rules: InferenceRules) -> bool:
-    """这个参考图格子在张数变少时改得动图吗。"""
+    """这个参考图格子在张数变少时改得动图吗（只查 binding 记录的 consumer）。"""
     consumer = target.get("consumer")
     if not isinstance(consumer, Mapping):
         return False

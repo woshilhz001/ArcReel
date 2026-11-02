@@ -64,7 +64,7 @@ def test_builtin_templates_declare_stage_and_trigger_and_lock_structural_partial
     templates = PromptTemplates(BUILTIN_DIRECTORY)
     metadata = templates.list_templates()
     styles = [entry for entry in metadata if entry.category == "style"]
-    assert len(styles) == 36
+    assert len(styles) == 37
     for entry in styles:
         assert entry.stage == "style"
         assert entry.invoked_by.model_dump() == {"kind": "user_action", "name": "style_selection"}

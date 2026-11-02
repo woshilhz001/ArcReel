@@ -13,14 +13,14 @@ from lib.prompts.style_templates import (
 
 def test_templates_count_and_definition_order():
     ids = list_template_ids()
-    assert len(ids) == 36
-    assert len(set(ids)) == 36
-    assert ids[0] == "live_cinematic_ancient"
-    assert ids[17] == "live_cyberpunk"
-    assert ids[18] == "anim_3d_cg"
+    assert len(ids) == 37
+    assert len(set(ids)) == 37
+    assert ids[0] == "live_ancient_realistic_drama"
+    assert ids[18] == "live_cyberpunk"
+    assert ids[19] == "anim_3d_cg"
     assert ids[-1] == "anim_90s_retro"
-    assert all(tpl_id.startswith("live_") for tpl_id in ids[:18])
-    assert all(tpl_id.startswith("anim_") for tpl_id in ids[18:])
+    assert all(tpl_id.startswith("live_") for tpl_id in ids[:19])
+    assert all(tpl_id.startswith("anim_") for tpl_id in ids[19:])
 
 
 def test_style_templates_are_slotless_and_grouped_under_style_category():
@@ -61,10 +61,10 @@ def test_resolve_template_prompt_unknown_raises(template_id):
 def test_list_templates_by_category():
     grouped = list_templates_by_category()
     assert set(grouped.keys()) == {"live", "anim"}
-    assert len(grouped["live"]) == 18
+    assert len(grouped["live"]) == 19
     assert len(grouped["anim"]) == 18
     assert grouped["live"][0] == {
-        "id": "live_cinematic_ancient",
-        "prompt": "精品古装真人短剧风格，专业打光，高质量电视剧质感",
+        "id": "live_ancient_realistic_drama",
+        "prompt": "精品古装真人短剧风格，写实画风，细腻真实的皮肤质感，考究服化道，专业打光，高品质电视剧质感",
     }
     assert [item["id"] for item in grouped["live"] + grouped["anim"]] == list_template_ids()
