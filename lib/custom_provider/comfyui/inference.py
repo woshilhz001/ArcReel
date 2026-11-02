@@ -909,8 +909,25 @@ def _pick(candidates: Sequence[Candidate], key: str) -> tuple[int, ...]:
     return ()
 
 
+def _normalize_marker_key(key: str) -> str:
+    """``reference_images1`` 这类「列表键 + 纯数字序号」归一到列表键本身。
+
+    序号是格子的口语写法（第一格、第二格……），语义键本身不含序号：列表键的并列即格子
+    （见 :func:`_pick`），标题上多出的数字只是人的标注。归一仅限 :data:`LIST_BINDING_KEYS`
+    ——单值键带数字（``prompt2``）是另一个词，不猜。
+    """
+    for list_key in LIST_BINDING_KEYS:
+        if key.startswith(list_key) and key[len(list_key) :].isdecimal():
+            return list_key
+    return key
+
+
 def _title_markers(workflow: Mapping[str, Any], rules: InferenceRules) -> Mapping[str, tuple[str, ...]]:
-    """``_meta.title`` 上的 ``ARCREEL:<key>`` 标记：语义键 → 打了标记的节点，按节点 id 升序。"""
+    """``_meta.title`` 上的 ``ARCREEL:<key>`` 标记：语义键 → 打了标记的节点，按节点 id 升序。
+
+    键先按 :func:`_normalize_marker_key` 归一：``ARCREEL:reference_images1`` 与
+    ``ARCREEL:reference_images`` 认作同一个键，序号不进语义键。
+    """
     found: dict[str, list[str]] = {}
     allowed = set(rules.semantic_keys) | {"output"} | set(rules.consumer_ports)
     for node_id, node in _nodes(workflow):
@@ -918,7 +935,7 @@ def _title_markers(workflow: Mapping[str, Any], rules: InferenceRules) -> Mappin
         if not title.lower().startswith(TITLE_MARKER_PREFIX):
             continue
         words = title[len(TITLE_MARKER_PREFIX) :].split()
-        key = words[0].lower() if words else ""
+        key = _normalize_marker_key(words[0].lower()) if words else ""
         if key in allowed:
             found.setdefault(key, []).append(node_id)
     return {key: tuple(sorted(nodes, key=_node_order)) for key, nodes in found.items()}

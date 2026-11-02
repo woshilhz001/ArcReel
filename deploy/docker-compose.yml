@@ -1,7 +1,9 @@
 services:
   arcreel:
-    image: arcreel/arcreel:latest
-    # build: ../  # 本地构建时取消注释，注释掉 image 行
+    # image: arcreel/arcreel:latest
+    build:
+      context: ../  # 本地构建时取消注释，注释掉 image 行
+      dockerfile: deploy/Dockerfile
     ports:
       - "1241:1241"
     # 端口发布到宿主机所有网卡：远程部署不得在 .env 中设置 AUTH_ENABLED=false。

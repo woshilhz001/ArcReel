@@ -13,6 +13,7 @@ export const STYLE_TEMPLATES: StyleTemplate[] = [
   { id: "live_zhang_yimou",       category: "live", thumbnail: "/style-thumbnails/live_zhang_yimou.png" },
   { id: "live_ancient_xianxia",   category: "live", thumbnail: "/style-thumbnails/live_ancient_xianxia.png" },
   { id: "live_premium_drama",     category: "live", thumbnail: "/style-thumbnails/live_premium_drama.png" },
+  { id: "live_ancient_realistic_drama", category: "live", thumbnail: "/style-thumbnails/live_ancient_realistic_drama.png" },
   { id: "live_cinema",            category: "live", thumbnail: "/style-thumbnails/live_cinema.png" },
   { id: "live_spartan",           category: "live", thumbnail: "/style-thumbnails/live_spartan.png" },
   { id: "live_bladerunner",       category: "live", thumbnail: "/style-thumbnails/live_bladerunner.png" },

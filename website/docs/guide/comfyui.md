@@ -68,7 +68,7 @@ ComfyUI 没有统一的参数化约定，导出物里每个节点只有 `inputs`
 
 推断认错节点、或同分候选太多时，有两种办法不必每次手选：
 
-- **标题约定。** 在 ComfyUI 里把节点标题改成 `ARCREEL:<语义键>`（如 `ARCREEL:prompt`、`ARCREEL:seed`、`ARCREEL:output`），ArcReel 会把它当成仅次于手动绑定的最强信号，压过任何按输入名或节点类型得出的猜测。前缀大小写不敏感，冒号之后取第一个词作语义键，后面可以继续写你自己看的说明。这份标记留在 workflow 里，重新导出、重新导入后依然有效。
+- **标题约定。** 在 ComfyUI 里把节点标题改成 `ARCREEL:<语义键>`（如 `ARCREEL:prompt`、`ARCREEL:seed`、`ARCREEL:output`），ArcReel 会把它当成仅次于手动绑定的最强信号，压过任何按输入名或节点类型得出的猜测。前缀大小写不敏感，冒号之后取第一个词作语义键，列表键可带格子序号（如 `ARCREEL:reference_images1`，序号会被忽略、只认 `reference_images`），后面可以继续写你自己看的说明。这份标记留在 workflow 里，重新导出、重新导入后依然有效。
 - **外部约定节点族。** 若 workflow 已经用了下面这几家的输入节点来声明对外参数，ArcReel 直接按它们的声明认领，不必再改标题：
 
   | 节点族 | 节点类型前缀 | 参数名取自 |
