@@ -66,6 +66,8 @@ protected: false
 ## 视频提示词（video_prompt）——切换到「动作设计师」视角
 
 - **video_prompt.action**：{{ partial("shared/action_writing_guide") }}
+{{ partial("shared/action_reinforce") }}
+{{ partial("shared/camera_motion_writing_guide") }}
 - **video_prompt.ambiance_audio**：{{ partial("shared/ambiance_audio_writing_guide") }}
 
 # 创作目标

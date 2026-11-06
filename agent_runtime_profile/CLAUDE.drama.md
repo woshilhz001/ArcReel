@@ -38,6 +38,8 @@
 ### 视频 prompt 措辞
 
 - **避开任务类型触发词**：`video_prompt` 里不要用「增加 / 删除 / 去掉 / 修改 / 替换 / 改成 / 延长 / 续写」这类祈使动词。部分模型（如 Seedance 2.5）按 prompt 措辞判定任务类型，带这些词会把参考生视频误判成视频编辑或视频延长，而误判在异步生成阶段才报错——任务已排队、已计费。改成直接描述目标画面本身：不写「把外套改成红色」，写「她穿着红色外套」
+- **运镜（camera_motion）选择**：`video_prompt.camera_motion` 的写作已内嵌选择指引（见 `lib/prompts/prompt_templates/templates/partials/shared/camera_motion_writing_guide.md`）：每个分镜主动选最匹配叙事功能的运镜值，Static 不是默认回退；按叙事功能分组（推进/拉出/跟拍/环绕/横向平移/垂直升降/摇晃/固定机位），时长匹配，相邻分镜运镜应有变化（连续 3 个以上不应全同一值）；只从 schema 声明的 14 个枚举值中选，一个分镜一个值；运镜由 camera_motion 字段承载，action 里不描述镜头自身。你用 `patch_episode_script` 改 camera_motion 时同口径。
+- **打斗 / 运动 / 镜头叙事分镜的 Action 强化层**：`video_prompt.action` 的写作已内嵌强化细则（见 `lib/prompts/prompt_templates/templates/partials/shared/action_reinforce.md`，记录见 `docs/action-reinforce/`），按分镜内容分两类启用：核心事件为打斗、冲撞、追逐、奔跑或激烈情绪爆发时启用高强度细则（节拍拆解（蓄→爆→落，拍数随时长）、景别决定可拍范围（特写不写飞出画外、中景写上半身、全景写全身位移）、强物理动词做主干、身体联动 + 环境交互各至少一处、有台词时动作与台词锚定）；动作幅度小但画面潜力足的细部操作（拉抽屉、点灯、翻纸、注水、擦拭）启用低强度丰富化细则（微动多层、质感感官锚定、环境同框）；纯静态对话不启用。你用 `patch_episode_script` 改 Action 时同口径：只细化已定稿事件，不新增情节 / 人物 / 物件，不偏离原著。Ambiance_Audio 配合：声音事件与 Action 节拍同步，不超出画内音边界。
 
 ### 工具调用
 

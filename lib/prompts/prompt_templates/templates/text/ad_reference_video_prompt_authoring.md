@@ -75,6 +75,8 @@ protected: false
 # 动作写作指引
 
 {{ partial("shared/action_writing_guide") }}
+{{ partial("shared/action_reinforce") }}
+{{ partial("shared/camera_motion_writing_guide") }}
 
 # 统一引用语法
 
