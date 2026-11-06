@@ -1,0 +1,84 @@
+# H3 Ref2VA「标准骨架 → 英语成品」润色指令（画面 + subject 特征英译，省 token）
+
+> 本文件是「生成 H3 格式」指令的自动润色步骤（agent 执行，无需用户再发指令）。
+> 目标：把 `--std` 产出的 `E1Uxx.en.txt` 标准骨架润色为**完全符合官方 ref-en.txt** 的
+> 英语成品——`detailed_description` 画面内容与 `subject_definitions` 的 featuring 特征
+> 英译；**台词/旁白（`<d>` 内）逐字保留原始语言**（中文/日语/英语等均可，语言标签按实际）；
+> 其余段落（summary / retention_analysis / 声音段）是脚本英文模板，不改动。
+> 格式硬约束以 `references/ref-en.txt` 为权威，本文件只列润色环节的增量约束。
+
+## 输入（全部是提炼后的小文件，不读 project.json 全文）
+
+1. 标准骨架：`h3_prompts/episode_{N}/E1Uxx[.pN].en.txt`（或 `skeleton/` 同份，一个 unit 一份）
+2. 该 unit 提炼：`h3_prompts/episode_{N}/refs/E1Uxx.md`（声音绑定 + 无参考图人物 + 原文线索）
+   与 `h3_prompts/episode_{N}/refs/E1Uxx.refs.md`（连线清单：`<Picture N>` ↔ 文件路径 ↔
+   主体提示——资产描述已提炼在此，**不要**再读 project.json）
+3. 格式权威：`references/ref-en.txt`
+
+## 任务
+
+把标准骨架润色为英语成品，**只动两处**，段落顺序与其余段落不动：
+
+1. **`detailed_description`**：找到每个 `[Shot N]` 行尾的 `(refine: translate to English)`
+   占位，把该行的**中文画面内容**改写为英语（镜头/摄像机/说话人规则见 ref-en.txt），
+   **移除占位标记**；运镜/构图/景别按下方「运镜编排」补全；
+2. **`subject_definitions`**：把每行 `featuring` 后的**中文资产特征**改写为英语
+   （参考图主体提示，按 ref-en.txt 的 `<Subject N>` 定义示例：外观/服装/特征清单）；
+   资产名（宁家议事堂 等专名）保留原样；
+3. 台词/旁白（`<d>` 内）：**逐字保留原始语言，不翻译**（可能是中文/日语/英语等，
+   语言标签 `<d>[Chinese]` / `<d>[Japanese]` 按实际，不改）；旁白行（`says in an
+   off-screen voiceover`）保持官方措辞；
+4. 其余段落（summary / retention_analysis / overall_soundscape / non_diegetic_music）
+   是脚本英文模板，**逐字保留、不改动**。
+
+**按 unit 小批润色**：一次只润一个 unit（拆分时按 `E1Uxx.pN` 逐段），不要批量。
+
+### 运镜/构图/景别：由你自主编排
+
+骨架的 `[Shot N]` 只写画面内容（中文），**不含运镜/构图/景别**。润色时你为每个镜头按
+ref-en.txt 的摄像机规则自主编排三要素：
+
+- 从画面内容出发写**景别**（wide shot / medium shot / close-up 等）、**构图**（主体位置/
+  前景背景/引导线）、**运镜**（运动类型 + 幅度 + 速度，如 `the camera pushes in with small
+  amplitude at slow speed`）；
+- 动作/对话密集的镜头给更紧的景别，环境/氛围镜头给更松的景别；
+- 每个镜头至少写清「景别 + 构图 + 运镜 + 画面内容」四要素，画面内容沿用骨架翻译、可补充细节。
+
+### 无参考图人物画像
+
+`refs/E1Uxx.md` 与 `characters.md` 标注「无参考图」的人物，按线索生成独立画像（身份/
+外观/音色/性格），跨 unit 只生成一份、写回 `characters.md` 对应小节。
+
+## 硬约束（违反即整份作废）
+
+- **不改 `<Subject N>` / 参考图引用（`@文件名.png`）编号与绑定**：编号 = 扩展后参考图
+  集合顺序（见 `unit_to_ref2va.py --max-refs`）；`refs/E1Uxx.refs.md` 的连线清单是工作流
+  侧加载参考图的依据；只能改语言，不能改编号所指。画面出场资产用 `@文件名.png` 标注
+  （ComfyUI 自动转 `<Subject N>`），不新增/改号。
+- **`@文件名.png` 标注保留原样**：画面中的 `@宁家族长.png` 等标注是 ComfyUI 关联参考图的
+  标记——英译画面内容时**保留原样**（不翻译、不删除、不改名），其前后文字才英译。
+- **台词/旁白逐字保留、一条不删**：骨架里有多少条 `<d>` 台词/旁白，成品必须一条不少、
+  逐字保留（含标点，**不翻译，保留原始语言**——中文/日语/英语均可，语言标签按实际）。
+  **删减/翻译台词 = 违约**；「放不下」是拆分问题——回 `unit_to_ref2va.py` 调大
+  `--max-unit-duration` 或缩减台词后重新拆分。
+- **正文英语**：除 `<d>` 内台词与可见屏幕文字外全部英语。
+- **`[Shot N]` 时间戳**：首镜头无时间戳；后续 `At MM:SS.mmm` 两位小数毫秒、严格递增、
+  落在 unit 时长内。
+- **说话人 ID 稳定**：同一说话人跨镜头同 `(S1)`；画外音声明嘴唇闭合。
+- **避免任务类型触发词**：不用 增加/删除/去掉/修改/替换/改成/延长/续写（中英同禁）。
+- **静态外观由参考图承担**：正文不堆外貌/服装/陈设清单（那是 `subject_definitions` 的事）。
+
+## 输出与校验
+
+英语成品写入 `h3_prompts/episode_{N}/E1Uxx[.pN].en.txt`（覆盖主目录标准版，不覆盖
+`skeleton/`）。校验（exit=0 才算完成）：
+
+```bash
+python .claude/skills/h3-video-prompt/scripts/check_h3_format.py --text "<成品>" \
+  --ref-count <references 数> --refs-from "h3_prompts/episode_{N}/refs/E1Uxx.refs.md" \
+  --compare "h3_prompts/episode_{N}/skeleton/E1Uxx[.pN].en.txt"
+```
+
+`--ref-count` 取该 unit 参考图数：`grep -c '^| <Picture' h3_prompts/episode_{N}/refs/E1Uxx.refs.md`；
+`--refs-from` 校验 `@file` 引用在连线清单内；`--compare` 拦截删台词（成品 `<d>` 数 < 骨架
+即 error）；有 error 按提示修正。
