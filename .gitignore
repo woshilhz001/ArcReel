@@ -99,3 +99,10 @@ docs/verification-reports/
 
 # mutmut 变异测试的工作副本（`mutmut run` 生成的整仓复制品）
 mutants/
+
+# 本地备份与临时文件
+backups/
+tmp_scene.json
+deploy/build.log
+deploy/Dockerfile - 副本*
+lib/custom_provider/comfyui/beifen/

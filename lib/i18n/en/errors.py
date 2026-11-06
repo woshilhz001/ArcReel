@@ -571,6 +571,11 @@ MESSAGES = {
         "The scene text of {unit_id} mentions @[{name}], which is not a registered asset or is not listed in "
         "that entry's reference fields: it is not numbered as a reference image and is sent as a plain name"
     ),
+    # Storyboard scene text names a registered asset listed in the entry's reference fields without @[name]
+    "storyboard_warn_plain_asset_name": (
+        "The scene text of {unit_id} mentions {name}, which is a registered asset listed in that entry's "
+        "reference fields, but is not written as @[{name}]: it is not numbered as a reference image and is sent as a plain name"
+    ),
     # Episode meta
     "episode_not_found": "Episode (id={episode}) not found or has no script file yet",
     "storyboard_batch_script_invalid": "The formal script of episode {episode} cannot be used for batch storyboard generation: its structure does not match the project generation mode, or it is not bound to this episode",

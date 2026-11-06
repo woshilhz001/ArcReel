@@ -573,6 +573,12 @@ MESSAGES = {
         "không nằm trong các trường tham chiếu của phân cảnh đó: sẽ không được đánh số thành ảnh N mà gửi "
         "nguyên tên"
     ),
+    # Mô tả khung hình nhắc tên tài sản đã đăng ký và đã trong trường tham chiếu nhưng không viết @[tên]
+    "storyboard_warn_plain_asset_name": (
+        "Mô tả khung hình của {unit_id} nhắc tới {name}, tên này đã được đăng ký là tài sản và đã nằm trong "
+        "các trường tham chiếu của phân cảnh đó, nhưng không được viết là @[{name}]: sẽ không được đánh số "
+        "thành ảnh N mà gửi nguyên tên"
+    ),
     # Episode meta
     "episode_not_found": "Không tìm thấy tập (id={episode}) hoặc tập chưa có tệp kịch bản",
     "storyboard_batch_script_invalid": "Không thể dùng kịch bản chính thức của tập {episode} để tạo hàng loạt phân cảnh: cấu trúc kịch bản không khớp với chế độ tạo của dự án, hoặc kịch bản chưa gắn với tập này",
