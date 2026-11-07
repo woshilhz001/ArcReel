@@ -37,6 +37,15 @@ from lib.backends.video_backends.gemini import GeminiVideoBackend, VertexVideoBa
 register_backend(PROVIDER_GEMINI, GeminiVideoBackend)
 register_backend("gemini-vertex-video", VertexVideoBackend)
 
+# Gemini Omni 走 Interactions API，与 Veo 是不同的请求协议，AI Studio 与 Vertex 各是一个内置调用端点。
+from lib.backends.video_backends.gemini_interactions import (
+    GeminiInteractionsVideoBackend,
+    VertexInteractionsVideoBackend,
+)
+
+register_backend("gemini-interactions-video", GeminiInteractionsVideoBackend)
+register_backend("gemini-vertex-interactions-video", VertexInteractionsVideoBackend)
+
 # Ark: volcengine-python-sdk[ark] is a project dependency。Seedance 各代是各自的内置调用端点，按端点名注册，
 # 方舟与方舟 Agent Plan 两个内置供应商共用（凭证差异在 backend_assembly 的构造闭包里）。
 from lib.backends.video_backends.ark import SEEDANCE_BACKENDS
@@ -86,6 +95,11 @@ from lib.backends.video_backends.kling import KLING_BACKENDS
 
 for _endpoint, _backend in KLING_BACKENDS.items():
     register_backend(_endpoint, _backend)
+
+# 可灵新版 API（模型名在路径里，只收 API Key）
+from lib.backends.video_backends.kling_model_path import KlingModelPathVideoBackend
+
+register_backend(KlingModelPathVideoBackend.endpoint_key, KlingModelPathVideoBackend)
 
 # Agnes — apihub 异步视频端点（裸 base64 + 轮询 + resume）
 from lib.backends.video_backends.agnes import AGNES_VIDEO_BACKENDS

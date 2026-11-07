@@ -23,6 +23,10 @@ from arcreel_market_core.endpoint_definition.kinds import COMFYUI_KIND
 from arcreel_market_core.endpoint_definition.media_type import definition_media_type
 from arcreel_market_core.video_backend_contract import ReferenceAudioMode, VideoCapabilities
 from lib.backends.audio_backends.dashscope import DashScopeAudioBackend
+from lib.backends.audio_backends.dashscope_speech_synthesizer import (
+    SPEECH_SYNTHESIZER_PATH,
+    DashScopeSpeechSynthesizerBackend,
+)
 from lib.backends.audio_backends.gemini import GeminiAudioBackend
 from lib.backends.audio_backends.minimax import MiniMaxAudioBackend
 from lib.backends.audio_backends.openai import OpenAIAudioBackend
@@ -31,7 +35,7 @@ from lib.backends.image_backends.ark import SEEDREAM_BACKENDS
 from lib.backends.image_backends.base import ImageCapability
 from lib.backends.image_backends.dashscope import DASHSCOPE_IMAGE_BACKENDS
 from lib.backends.image_backends.gemini import GeminiImageBackend
-from lib.backends.image_backends.kling import KlingImageBackend
+from lib.backends.image_backends.kling import KLING_IMAGE_BACKENDS
 from lib.backends.image_backends.minimax import MiniMaxImageBackend
 from lib.backends.image_backends.openai import OpenAIImageBackend
 from lib.backends.image_backends.openai_chat import OpenAIChatImageBackend
@@ -39,6 +43,7 @@ from lib.backends.image_backends.openrouter import IMAGES_PATH as OPENROUTER_IMA
 from lib.backends.image_backends.openrouter import MODELS_PATH as OPENROUTER_MODELS_PATH
 from lib.backends.image_backends.openrouter import OpenRouterImageBackend
 from lib.backends.image_backends.registry import reference_limit_of
+from lib.backends.kling_shared import kling_model_path_base_url
 from lib.backends.minimax_shared import minimax_text_base_url
 from lib.backends.provider_assets import InferenceCredentialRef
 from lib.backends.text_backends.anthropic import AnthropicTextBackend
@@ -48,7 +53,9 @@ from lib.backends.text_backends.openai_responses import OpenAIResponsesTextBacke
 from lib.backends.video_backends.ark import SEEDANCE_BACKENDS
 from lib.backends.video_backends.dashscope import DASHSCOPE_VIDEO_BACKENDS, classify_wan_model
 from lib.backends.video_backends.gemini import GeminiVideoBackend
+from lib.backends.video_backends.gemini_interactions import GeminiInteractionsVideoBackend
 from lib.backends.video_backends.kling import KLING_BACKENDS
+from lib.backends.video_backends.kling_model_path import KlingModelPathVideoBackend
 from lib.backends.video_backends.openai import OpenAIVideoBackend
 from lib.backends.video_backends.vidu import VIDU_BACKENDS
 from lib.config.url_utils import (
@@ -447,17 +454,22 @@ def _build_openai_tts(provider, model_id: str, path_overrides: PathOverrides = N
 
 
 def _build_dashscope_tts(
-    provider, model_id: str, path_overrides: PathOverrides = NO_PATH_OVERRIDES
+    provider,
+    model_id: str,
+    path_overrides: PathOverrides = NO_PATH_OVERRIDES,
+    *,
+    backend_class: type[DashScopeAudioBackend] = DashScopeAudioBackend,
+    requests: tuple[EndpointRequest, ...] | None = None,
 ) -> CustomAudioBackend:
     # backend 内部由 host 派生 /api/v1（容忍带/不带后缀），此处传原始 base_url 即可，不重复归一化
     layer = path_override_layer(
-        _DASHSCOPE_GENERATION_REQUESTS,
+        _DASHSCOPE_GENERATION_REQUESTS if requests is None else requests,
         path_overrides,
         provider.base_url,
         dashscope_native_base_url(provider.base_url),
         model_id,
     )
-    delegate = DashScopeAudioBackend(
+    delegate = backend_class(
         api_key=provider.api_key, base_url=provider.base_url, model=model_id, transport_layer=layer
     )
     return CustomAudioBackend(provider_id=provider.provider_id, delegate=delegate, model=model_id)
@@ -511,16 +523,23 @@ def _build_openai_video(
 
 
 def _build_gemini_video(
-    provider, model_id: str, path_overrides: PathOverrides = NO_PATH_OVERRIDES
+    provider,
+    model_id: str,
+    path_overrides: PathOverrides = NO_PATH_OVERRIDES,
+    *,
+    backend_class: type[GeminiVideoBackend] = GeminiVideoBackend,
+    requests: tuple[EndpointRequest, ...] | None = None,
 ) -> CustomVideoBackend:
     # 自定义供应商只走 AI Studio 模式（Vertex 凭证不经 base_url）；SDK 自己拼 api_version
     base_url = ensure_google_base_url(provider.base_url) or None
-    delegate = GeminiVideoBackend(
+    delegate = backend_class(
         backend_type="aistudio",
         api_key=provider.api_key,
         base_url=base_url,
         video_model=model_id,
-        transport_layer=_google_path_layer(_GEMINI_VIDEO_REQUESTS, provider.base_url, model_id, path_overrides),
+        transport_layer=_google_path_layer(
+            requests or _GEMINI_VIDEO_REQUESTS, provider.base_url, model_id, path_overrides
+        ),
     )
     return CustomVideoBackend(provider_id=provider.provider_id, delegate=delegate, model=model_id)
 
@@ -569,8 +588,18 @@ _KLING_VIDEO_REQUESTS = _python_requests(
     ("submit_multi_image2video", "cp_request_submit_multi_image2video", "/videos/multi-image2video"),
     ("poll_multi_image2video", "cp_request_poll_multi_image2video", "/videos/multi-image2video/{{ task_id }}"),
 )
+# 可灵新版 API：模型名写在路径里，域名后不带 /v1；轮询的任务 id 走 query（task_ids），覆盖路径不带 query 时原样保留它。
+_KLING_MODEL_PATH_VIDEO_REQUESTS = _python_requests(
+    "strip_version",
+    ("submit_text2video", "cp_request_submit_text2video", "/text-to-video/{{ model }}"),
+    ("submit_image2video", "cp_request_submit_img2video", "/image-to-video/{{ model }}"),
+    ("poll", "cp_request_poll", "/tasks"),
+)
 _DASHSCOPE_GENERATION_REQUESTS = _python_requests(
     "dashscope_api_v1", ("generate", "cp_request_generate", "/services/aigc/multimodal-generation/generation")
+)
+_DASHSCOPE_SPEECH_SYNTHESIZER_REQUESTS = _python_requests(
+    "dashscope_api_v1", ("generate", "cp_request_generate", SPEECH_SYNTHESIZER_PATH)
 )
 _DASHSCOPE_ASYNC_VIDEO_REQUESTS = _python_requests(
     "dashscope_api_v1",
@@ -597,6 +626,13 @@ _GEMINI_VIDEO_REQUESTS = _python_requests(
     ("poll", "cp_request_poll", "/v1beta/{{ task_id }}"),
     # SDK 从产物 uri 取出文件 id，再按 base_url 拼下载地址，所以下载也相对 base_url
     ("download", "cp_request_download", "/v1beta/files/{{ file_id }}:download"),
+)
+
+
+_GEMINI_INTERACTIONS_VIDEO_REQUESTS = _python_requests(
+    "strip_version",
+    ("submit", "cp_request_submit", "/v1beta/interactions"),
+    ("poll", "cp_request_poll", "/v1beta/interactions/{{ task_id }}"),
 )
 
 
@@ -757,12 +793,12 @@ def _build_minimax_image(
 
 
 def _build_kling_image(
-    provider, model_id: str, path_overrides: PathOverrides = NO_PATH_OVERRIDES
+    provider, model_id: str, path_overrides: PathOverrides = NO_PATH_OVERRIDES, *, endpoint: str
 ) -> CustomImageBackend:
     # 中转站「原样代理可灵」：bearer 模式旁路 JWT 管理器，用静态 api_key 直发可灵原生异步图像端点。
     # 仅 host 时补全可灵协议挂载路径 /v1（含显式路径则原样信任）；原生 model_name 透传不解耦别名。
     base_url = _ensure_url_path_suffix(provider.base_url, "/v1")
-    delegate = KlingImageBackend(
+    delegate = KLING_IMAGE_BACKENDS[endpoint](
         auth_mode="bearer",
         api_key=provider.api_key,
         base_url=base_url,
@@ -786,6 +822,22 @@ def _build_kling_video(
         model=model_id,
         transport_layer=path_override_layer(
             _KLING_VIDEO_REQUESTS, path_overrides, provider.base_url, base_url, model_id
+        ),
+    )
+    return CustomVideoBackend(provider_id=provider.provider_id, delegate=delegate, model=model_id)
+
+
+def _build_kling_model_path_video(
+    provider, model_id: str, path_overrides: PathOverrides = NO_PATH_OVERRIDES
+) -> CustomVideoBackend:
+    # 新版 API 只收 API Key；base_url 剥去末尾版本段（中转站照抄旧版地址时常带 /v1）。
+    base_url = kling_model_path_base_url(provider.base_url)
+    delegate = KlingModelPathVideoBackend(
+        api_key=provider.api_key,
+        base_url=base_url,
+        model=model_id,
+        transport_layer=path_override_layer(
+            _KLING_MODEL_PATH_VIDEO_REQUESTS, path_overrides, provider.base_url, base_url, model_id
         ),
     )
     return CustomVideoBackend(provider_id=provider.provider_id, delegate=delegate, model=model_id)
@@ -971,6 +1023,9 @@ ENDPOINT_REGISTRY: dict[str, EndpointSpec] = {
             metering_backend=backend,
             video_caps_for_model=backend.video_capabilities_for_model,
             end_image_capable=True,
+            # 参考生视频把 reference_audio_files 写进 sounds 的端点（Q4）才下发参考音频；取自 backend 的
+            # 同一份段数声明，不另写端点清单。
+            reference_audio_capable=backend.endpoint.max_reference_audio > 0,
         )
         for key, backend in VIDU_BACKENDS.items()
     },
@@ -1009,6 +1064,21 @@ ENDPOINT_REGISTRY: dict[str, EndpointSpec] = {
         build_backend=_build_dashscope_tts,
         requests=_DASHSCOPE_GENERATION_REQUESTS,
     ),
+    # qwen-audio-*-tts 走 SpeechSynthesizer：请求体、音色表与用量回报都与 multimodal 端点不同
+    "dashscope-speech-synthesizer": EndpointSpec(
+        key="dashscope-speech-synthesizer",
+        media_type="audio",
+        family="dashscope",
+        display_name_key="endpoint_dashscope_speech_synthesizer_display",
+        request_method="POST",
+        request_path_template=f"/api/v1{SPEECH_SYNTHESIZER_PATH}",
+        build_backend=partial(
+            _build_dashscope_tts,
+            backend_class=DashScopeSpeechSynthesizerBackend,
+            requests=_DASHSCOPE_SPEECH_SYNTHESIZER_REQUESTS,
+        ),
+        requests=_DASHSCOPE_SPEECH_SYNTHESIZER_REQUESTS,
+    ),
     "gemini-video": EndpointSpec(
         key="gemini-video",
         media_type="video",
@@ -1022,6 +1092,23 @@ ENDPOINT_REGISTRY: dict[str, EndpointSpec] = {
         # 参考图上限、音轨形态按 model 读 backend 纯 caps 函数（不构造 client）
         video_caps_for_model=GeminiVideoBackend.video_capabilities_for_model,
         # generate() 把 end_image 下传为 config.last_frame
+        end_image_capable=True,
+    ),
+    "gemini-interactions-video": EndpointSpec(
+        key="gemini-interactions-video",
+        media_type="video",
+        family="google",
+        display_name_key="endpoint_gemini_interactions_video_display",
+        request_method="POST",
+        request_path_template="/v1beta/interactions",
+        build_backend=partial(
+            _build_gemini_video,
+            backend_class=GeminiInteractionsVideoBackend,
+            requests=_GEMINI_INTERACTIONS_VIDEO_REQUESTS,
+        ),
+        requests=_GEMINI_INTERACTIONS_VIDEO_REQUESTS,
+        metering_backend=GeminiInteractionsVideoBackend,
+        video_caps_for_model=GeminiInteractionsVideoBackend.video_capabilities_for_model,
         end_image_capable=True,
     ),
     "minimax-tts": EndpointSpec(
@@ -1073,18 +1160,21 @@ ENDPOINT_REGISTRY: dict[str, EndpointSpec] = {
         requests=_MINIMAX_IMAGE_REQUESTS,
         metering_backend=MiniMaxImageBackend,
     ),
-    "kling-image": EndpointSpec(
-        key="kling-image",
-        media_type="image",
-        family="kling",
-        display_name_key="endpoint_kling_image_display",
-        request_method="POST",
-        request_path_template="/v1/images/generations",
-        image_capabilities=frozenset({ImageCapability.TEXT_TO_IMAGE, ImageCapability.IMAGE_TO_IMAGE}),
-        build_backend=_build_kling_image,
-        requests=_KLING_IMAGE_REQUESTS,
-        metering_backend=KlingImageBackend,
-    ),
+    **{
+        key: EndpointSpec(
+            key=key,
+            media_type="image",
+            family="kling",
+            display_name_key="endpoint_" + key.replace("-", "_") + "_display",
+            request_method="POST",
+            request_path_template="/v1/images/generations",
+            image_capabilities=backend.CHANNEL_CAPABILITIES,
+            build_backend=partial(_build_kling_image, endpoint=key),
+            requests=_KLING_IMAGE_REQUESTS,
+            metering_backend=backend,
+        )
+        for key, backend in KLING_IMAGE_BACKENDS.items()
+    },
     **{
         key: EndpointSpec(
             key=key,
@@ -1101,6 +1191,19 @@ ENDPOINT_REGISTRY: dict[str, EndpointSpec] = {
         )
         for key, backend in KLING_BACKENDS.items()
     },
+    "kling-video-model-path": EndpointSpec(
+        key="kling-video-model-path",
+        media_type="video",
+        family="kling",
+        display_name_key="endpoint_kling_video_model_path_display",
+        request_method="POST",
+        request_path_template="/{text-to-video,image-to-video}/{model}",
+        build_backend=_build_kling_model_path_video,
+        requests=_KLING_MODEL_PATH_VIDEO_REQUESTS,
+        metering_backend=KlingModelPathVideoBackend,
+        video_caps_for_model=KlingModelPathVideoBackend.video_capabilities_for_model,
+        end_image_capable=True,
+    ),
 }
 
 
@@ -1527,7 +1630,7 @@ def endpoint_spec_to_dict(spec: EndpointSpec) -> dict:
 _IMAGE_PATTERN = re.compile(r"image|dall|img|imagen|flux|seedream|jimeng|viduq[12](?:[-_].*)?", re.IGNORECASE)
 _VIDEO_PATTERN = re.compile(
     r"video|sora|kling|wan|seedance|cog|mochi|veo|pika|runway|"
-    r"vidu2(?:\.0)?(?:[-_].*)?|viduq3(?:[-_].*)?",
+    r"vidu2(?:\.0)?(?:[-_].*)?|viduq[34](?:[-_].*)?",
     re.IGNORECASE,
 )
 # TTS 模型 id 识别（tts-1 / gpt-4o-mini-tts / speech-1.5 / cosyvoice 等）。
@@ -1535,6 +1638,8 @@ _VIDEO_PATTERN = re.compile(
 _AUDIO_PATTERN = re.compile(r"tts|speech|cosyvoice", re.IGNORECASE)
 # 通义 TTS 家族（qwen-tts / qwen3-tts-flash 等）走百炼原生同步端点，不是 /v1/audio/speech
 _QWEN_TTS_PATTERN = re.compile(r"qwen3?-tts", re.IGNORECASE)
+# qwen-audio-<版本>-tts 家族（qwen-audio-3.1-tts-flash 等）走百炼 SpeechSynthesizer 端点
+_QWEN_AUDIO_TTS_PATTERN = re.compile(r"qwen-audio-[\d.]+-tts", re.IGNORECASE)
 # MiniMax 语音型号（speech-2.8-hd / speech-02-turbo 等，剥离命名空间后整段比较）走 t2a_v2。
 # 必须带 -hd / -turbo 档位后缀：Fish Audio 的 speech-1.5 等同名前缀 id 仍是 /v1/audio/speech。
 _MINIMAX_TTS_PATTERN = re.compile(r"speech-[\d.]+-(?:hd|turbo)")
@@ -1652,13 +1757,14 @@ def _infer_endpoint_by_name(model_id: str, discovery_format: str) -> str:
        语义但本质是视频）；其余含 image 语义走 "kling-image"，否则走 "kling-video"。kling 同时命中
        _VIDEO_PATTERN，须先于通用 is_video 拦截，否则视频会落到 openai-video；v3-omni 图像/视频同名
        默认归视频、图像手动选。
-    3) gemini 原生模型（非 video）→ TTS 走 "gemini-tts"，image 形态走 "gemini-image"，否则文本走
-       "gemini-generate"（不分 discovery_format）
+    3) gemini-omni → "gemini-interactions-video"；其余 gemini 原生模型（非 video）→ TTS 走 "gemini-tts"，
+       image 形态走 "gemini-image"，否则文本走 "gemini-generate"（不分 discovery_format）
     4) 视频家族 → seedance 按名字里的代际取 "ark-seedance-2-5" / "ark-seedance-2"，没写明代际取
-       "ark-seedance-1"；viduq3→"vidu-video"、Veo 且 discovery_format=google→"gemini-video"、否则 "openai-video"
+       "ark-seedance-1"；viduq3 / viduq4→"vidu-video"、Veo 且 discovery_format=google→"gemini-video"、否则 "openai-video"
     5) 图像家族 → seedream→"ark-seedream-3" / "ark-seedream-4"（不分 discovery_format），其余 discovery_format=google 走
        "gemini-image" 否则 "openai-images"（imagen 随图像家族推断，不再单独拦截）
-    6) TTS 家族（tts/speech/cosyvoice）→ qwen-tts / qwen3-tts 走 "dashscope-tts"，MiniMax 的
+    6) TTS 家族（tts/speech/cosyvoice）→ qwen-audio-<版本>-tts 走 "dashscope-speech-synthesizer"，
+       qwen-tts / qwen3-tts 走 "dashscope-tts"，MiniMax 的
        speech-<版本>-hd|turbo 走 "minimax-tts"，其余 "openai-tts"
        （不分 discovery_format；precedence 在 text 默认之前）
     7) 默认（文本）→ discovery_format=google 走 "gemini-generate" 否则 "openai-chat"
@@ -1756,6 +1862,8 @@ def _infer_endpoint_by_name(model_id: str, discovery_format: str) -> str:
     # 图像家族推断。复用上面的 wan_image_variant（排除 image-to-video 续接别名后的图像判定）。
     is_video = bool(_VIDEO_PATTERN.search(model_id)) and not wan_image_variant
 
+    if "gemini-omni" in lowered:
+        return "gemini-interactions-video"
     if "gemini" in lowered and not is_video:
         if "tts" in lowered:
             return "gemini-tts"
@@ -1763,7 +1871,7 @@ def _infer_endpoint_by_name(model_id: str, discovery_format: str) -> str:
     if is_video:
         if "seedance" in lowered:
             return _seedance_endpoint(model_id)
-        if "viduq3" in lowered:
+        if "viduq3" in lowered or "viduq4" in lowered:
             return _request_profile_endpoint("vidu", model_id)
         # Veo 的 OpenAI 兼容层沿用 /v1/videos，只有 google 发现协议才是原生 predictLongRunning
         if "veo" in lowered and discovery_format == "google":
@@ -1777,6 +1885,8 @@ def _infer_endpoint_by_name(model_id: str, discovery_format: str) -> str:
             return image_endpoint_for_name("ark", model_id)
         return "gemini-image" if discovery_format == "google" else "openai-images"
     if _AUDIO_PATTERN.search(model_id) and not _ASR_PATTERN.search(model_id):
+        if _QWEN_AUDIO_TTS_PATTERN.search(model_id):
+            return "dashscope-speech-synthesizer"
         if _QWEN_TTS_PATTERN.search(model_id):
             return "dashscope-tts"
         return "minimax-tts" if _MINIMAX_TTS_PATTERN.fullmatch(canonical) else "openai-tts"

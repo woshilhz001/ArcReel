@@ -189,6 +189,7 @@ _VIDU_PROFILES = {
     "viduq1": "q1",
     "viduq1-classic": "q1-classic",
     "vidu2.0": "2",
+    "viduq4-preview": "q4",
 }
 _KLING_PROFILES = {
     "kling-v2-5-turbo": "pro-silent",
@@ -196,6 +197,10 @@ _KLING_PROFILES = {
     "kling-v3": "audio",
     "kling-v3-omni": "audio",
     "kling-video-o1": "silent",
+    # 只在新版 API 上提供的型号（模型名写在路径里）
+    "kling-4.0": "model-path",
+    "kling-4.0-flash": "model-path",
+    "kling-3.0-turbo": "model-path",
 }
 _GROK_ENDPOINTS = ("grok-video-classic", "grok-video-mixed")
 _VIDU_ENDPOINTS = (
@@ -210,8 +215,15 @@ _VIDU_ENDPOINTS = (
     "vidu-video-q1",
     "vidu-video-q1-classic",
     "vidu-video-2",
+    "vidu-video-q4",
 )
-_KLING_ENDPOINTS = ("kling-video-pro-silent", "kling-video-pro-audio", "kling-video-audio", "kling-video-silent")
+_KLING_ENDPOINTS = (
+    "kling-video-pro-silent",
+    "kling-video-pro-audio",
+    "kling-video-audio",
+    "kling-video-silent",
+    "kling-video-model-path",
+)
 
 
 def request_profile_endpoint_for_name(provider_id: str, name: str) -> str | None:
@@ -295,9 +307,9 @@ def _build_gemini_image(config: LoadedConfig, model_id: str | None, *, backend_t
     )
 
 
-def _build_gemini_video(config: LoadedConfig, model_id: str | None, *, backend_type: str) -> Any:
+def _build_gemini_video(config: LoadedConfig, model_id: str | None, *, backend_type: str, registry_backend: str) -> Any:
     return _media_create_backend("video")(
-        "gemini-vertex-video" if backend_type == "vertex" else _GEMINI_REGISTRY_BACKEND,
+        registry_backend,
         backend_type=backend_type,
         api_key=config.credentials.get("api_key"),
         base_url=config.credentials.get("base_url"),
@@ -318,10 +330,18 @@ def _build_gemini_audio(config: LoadedConfig, model_id: str | None, *, backend_t
     )
 
 
-_GEMINI_BUILDS = {"image": _build_gemini_image, "video": _build_gemini_video, "audio": _build_gemini_audio}
+_GEMINI_BUILDS = {"image": _build_gemini_image, "audio": _build_gemini_audio}
 
 
-_GEMINI_ENDPOINTS = {"image": "gemini-image", "video": "gemini-video", "audio": "gemini-tts"}
+_GEMINI_ENDPOINTS = {"image": "gemini-image", "audio": "gemini-tts"}
+
+
+#: 视频请求协议 → backend_type → 该凭证下的视频端点名。Veo 的长任务是默认端点（AI Studio 的 Veo 在视频 backend
+#: registry 里登记为裸 "gemini"，其余端点名即 registry 名）；Gemini Omni 走 Interactions API。
+_GEMINI_VIDEO_ENDPOINTS: Mapping[str, Mapping[str, str]] = {
+    "veo": {"aistudio": "gemini-video", "vertex": "gemini-vertex-video"},
+    "interactions": {"aistudio": "gemini-interactions-video", "vertex": "gemini-vertex-interactions-video"},
+}
 
 
 def _gemini_spec(provider_id: str, media_type: str, *, backend_type: str) -> ProviderSpec:
@@ -329,13 +349,20 @@ def _gemini_spec(provider_id: str, media_type: str, *, backend_type: str) -> Pro
     return ProviderSpec(
         provider_id=provider_id,
         media_type=media_type,
-        registry_backend="gemini-vertex-video"
-        if media_type == "video" and backend_type == "vertex"
-        else _GEMINI_REGISTRY_BACKEND,
+        registry_backend=_GEMINI_REGISTRY_BACKEND,
         build_backend=partial(build, backend_type=backend_type),
-        endpoint="gemini-vertex-video"
-        if media_type == "video" and backend_type == "vertex"
-        else _GEMINI_ENDPOINTS[media_type],
+        endpoint=_GEMINI_ENDPOINTS[media_type],
+    )
+
+
+def _gemini_video_spec(provider_id: str, endpoint: str, *, backend_type: str) -> ProviderSpec:
+    registry_backend = _GEMINI_REGISTRY_BACKEND if endpoint == "gemini-video" else endpoint
+    return ProviderSpec(
+        provider_id=provider_id,
+        media_type="video",
+        registry_backend=registry_backend,
+        build_backend=partial(_build_gemini_video, backend_type=backend_type, registry_backend=registry_backend),
+        endpoint=endpoint,
     )
 
 
@@ -379,13 +406,13 @@ def _build_kling(config: LoadedConfig, model_id: str | None, *, media_type: str,
     return _media_create_backend(media_type)(endpoint or _KLING_REGISTRY_BACKEND, **kwargs)
 
 
-def _kling_spec(media_type: str) -> ProviderSpec:
+def _kling_spec(media_type: str, *, endpoint: str | None = None) -> ProviderSpec:
     return ProviderSpec(
         provider_id=_KLING_REGISTRY_BACKEND,
         media_type=media_type,
-        registry_backend=_KLING_REGISTRY_BACKEND,
-        build_backend=partial(_build_kling, media_type=media_type),
-        endpoint=f"kling-{media_type}",
+        registry_backend=endpoint or _KLING_REGISTRY_BACKEND,
+        build_backend=partial(_build_kling, media_type=media_type, endpoint=endpoint),
+        endpoint=endpoint or f"kling-{media_type}",
     )
 
 
@@ -557,6 +584,7 @@ PROVIDER_ONLY_ENDPOINTS: Mapping[str, str] = {
     "agnes-video-2": "video",
     "agnes-video-2-5": "video",
     "gemini-vertex-video": "video",
+    "gemini-vertex-interactions-video": "video",
 }
 
 #: 简单族的 image/video/audio：(provider_id, media_type) → 端点名。
@@ -566,7 +594,6 @@ _SIMPLE_MEDIA_ENDPOINTS: Mapping[tuple[str, str], str] = {
     ("vidu", "image"): "vidu-image",
     ("minimax", "image"): "minimax-image",
     ("openai", "video"): "openai-video",
-    ("dashscope", "audio"): "dashscope-tts",
     ("minimax", "audio"): "minimax-tts",
 }
 
@@ -597,12 +624,30 @@ _specs += [
     for provider_id, endpoints in _IMAGE_ENDPOINTS.items()
     for endpoint in endpoints
 ]
+#: 百炼音频的两个端点：multimodal-generation（qwen3-tts，默认端点）与 SpeechSynthesizer（qwen-audio-*-tts），
+#: registry 名就是端点名（``lib.backends.audio_backends.DASHSCOPE_AUDIO_BACKENDS``）。
+_DASHSCOPE_AUDIO_ENDPOINTS = ("dashscope-tts", "dashscope-speech-synthesizer")
+_specs += [
+    ProviderSpec(
+        provider_id="dashscope",
+        media_type="audio",
+        registry_backend=endpoint,
+        build_backend=partial(_build_simple, media_type="audio", registry_backend=endpoint),
+        endpoint=endpoint,
+    )
+    for endpoint in _DASHSCOPE_AUDIO_ENDPOINTS
+]
 _specs += [
     _gemini_spec(provider_id, media_type, backend_type=backend_type)
     for provider_id, backend_type in _GEMINI_BACKEND_TYPES.items()
-    for media_type in ("image", "video", "audio")
+    for media_type in ("image", "audio")
 ]
-_specs += [_kling_spec("image")]
+_specs += [
+    _gemini_video_spec(provider_id, by_backend_type[backend_type], backend_type=backend_type)
+    for provider_id, backend_type in _GEMINI_BACKEND_TYPES.items()
+    for by_backend_type in _GEMINI_VIDEO_ENDPOINTS.values()
+]
+_specs += [_kling_spec("image"), _kling_spec("image", endpoint="kling-image-single")]
 _specs += [
     ProviderSpec(
         provider_id=provider,
@@ -708,12 +753,16 @@ _MULTI_ENDPOINT_DEFAULTS: Mapping[tuple[str, str], str] = {
     ("ark", "image"): "ark-seedream-4",
     ("ark-agent-plan", "image"): "ark-seedream-4",
     ("dashscope", "image"): "dashscope-qwen-image",
+    ("gemini-aistudio", "video"): "gemini-video",
+    ("gemini-vertex", "video"): "gemini-vertex-video",
     ("agnes", "image"): "agnes-image-tier",
     ("minimax", "video"): "minimax-hailuo-v1",
     ("grok", "video"): "grok-video-classic",
     ("vidu", "video"): "vidu-video-q3-turbo",
+    ("kling", "image"): "kling-image",
     ("kling", "video"): "kling-video-pro-silent",
     ("dashscope", "video"): "dashscope-always-on-video",
+    ("dashscope", "audio"): "dashscope-tts",
     ("agnes", "video"): "agnes-video-2-5",
     # 方舟的默认视频模型是 Seedance 2.0 系列
     ("ark", "video"): "ark-seedance-2",
@@ -854,6 +903,13 @@ def agnes_video_endpoint_for_name(name: str) -> str | None:
     return None
 
 
+def gemini_video_endpoint_for_name(provider_id: str, name: str) -> str | None:
+    """按名字预填 Gemini 视频的请求协议：Gemini Omni 走 Interactions API，其余由供应商默认端点决定。"""
+    if "gemini-omni" not in name.strip().lower():
+        return None
+    return _GEMINI_VIDEO_ENDPOINTS["interactions"][_GEMINI_BACKEND_TYPES[provider_id]]
+
+
 def builtin_model_endpoint(provider_id: str, media_type: str, model_id: str | None) -> str:
     """官方模型读取目录声明，用户添加的模型读取保存的选择；未声明时取供应商默认端点。
 
@@ -883,6 +939,8 @@ def infer_builtin_endpoint(provider_id: str, media_type: str, model_id: str) -> 
             if endpoint is not None:
                 return endpoint
         return declared.default
+    if media_type == "video" and provider_id in _GEMINI_BACKEND_TYPES:
+        return gemini_video_endpoint_for_name(provider_id, model_id) or declared.default
     discovery_format = "google" if provider_id in _GEMINI_BACKEND_TYPES else "openai"
     inferred = (
         agnes_video_endpoint_for_name(model_id) if provider_id == "agnes" and media_type == "video" else None

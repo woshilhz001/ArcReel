@@ -100,6 +100,12 @@ BUILTIN_ENDPOINTS: Final[Mapping[str, BuiltinEndpoint]] = MappingProxyType(
             "vidu-video-q3-turbo",
         ),
         **_baseline("audio", "dashscope-tts", "gemini-tts", "minimax-tts"),
+        "kling-image-single": BuiltinEndpoint("image", since="0.35.1"),
+        "kling-video-model-path": BuiltinEndpoint("video", since="0.35.1"),
+        "dashscope-speech-synthesizer": BuiltinEndpoint("audio", since="0.35.1"),
+        "gemini-interactions-video": BuiltinEndpoint("video", since="0.35.1"),
+        "gemini-vertex-interactions-video": BuiltinEndpoint("video", since="0.35.1"),
+        "vidu-video-q4": BuiltinEndpoint("video", since="0.35.1"),
     }
 )
 
@@ -131,18 +137,20 @@ BUILTIN_PROVIDER_ENDPOINTS: Final[Mapping[str, Mapping[str, ProviderEndpointOpti
                 ),
                 "dashscope-always-on-video",
             ),
-            "audio": _single("dashscope-tts"),
+            "audio": ProviderEndpointOptions(("dashscope-tts", "dashscope-speech-synthesizer"), "dashscope-tts"),
         },
         "gemini-aistudio": {
             "text": _single("gemini-generate"),
             "image": _single("gemini-image"),
-            "video": _single("gemini-video"),
+            "video": ProviderEndpointOptions(("gemini-video", "gemini-interactions-video"), "gemini-video"),
             "audio": _single("gemini-tts"),
         },
         "gemini-vertex": {
             "text": _single("gemini-generate"),
             "image": _single("gemini-image"),
-            "video": _single("gemini-vertex-video"),
+            "video": ProviderEndpointOptions(
+                ("gemini-vertex-video", "gemini-vertex-interactions-video"), "gemini-vertex-video"
+            ),
             "audio": _single("gemini-tts"),
         },
         "grok": {
@@ -151,9 +159,15 @@ BUILTIN_PROVIDER_ENDPOINTS: Final[Mapping[str, Mapping[str, ProviderEndpointOpti
             "video": ProviderEndpointOptions(("grok-video-classic", "grok-video-mixed"), "grok-video-classic"),
         },
         "kling": {
-            "image": _single("kling-image"),
+            "image": ProviderEndpointOptions(("kling-image", "kling-image-single"), "kling-image"),
             "video": ProviderEndpointOptions(
-                ("kling-video-pro-silent", "kling-video-pro-audio", "kling-video-audio", "kling-video-silent"),
+                (
+                    "kling-video-pro-silent",
+                    "kling-video-pro-audio",
+                    "kling-video-audio",
+                    "kling-video-silent",
+                    "kling-video-model-path",
+                ),
                 "kling-video-pro-silent",
             ),
         },
@@ -185,6 +199,7 @@ BUILTIN_PROVIDER_ENDPOINTS: Final[Mapping[str, Mapping[str, ProviderEndpointOpti
                     "vidu-video-q1",
                     "vidu-video-q1-classic",
                     "vidu-video-2",
+                    "vidu-video-q4",
                 ),
                 "vidu-video-q3-turbo",
             ),

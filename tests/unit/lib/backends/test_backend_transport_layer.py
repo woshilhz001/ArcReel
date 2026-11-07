@@ -16,6 +16,7 @@ import pytest
 from arcreel_market_core.video_backend_contract import VideoGenerationRequest
 from lib.backends.audio_backends.base import AudioSynthesisRequest
 from lib.backends.audio_backends.dashscope import DashScopeAudioBackend
+from lib.backends.audio_backends.dashscope_speech_synthesizer import DashScopeSpeechSynthesizerBackend
 from lib.backends.audio_backends.gemini import GeminiAudioBackend
 from lib.backends.audio_backends.minimax import MiniMaxAudioBackend
 from lib.backends.audio_backends.openai import OpenAIAudioBackend
@@ -38,6 +39,7 @@ from lib.backends.video_backends.ark import Seedance2VideoBackend
 from lib.backends.video_backends.dashscope import DashScopeVideoBackend
 from lib.backends.video_backends.gemini import GeminiVideoBackend
 from lib.backends.video_backends.kling import KlingVideoBackend
+from lib.backends.video_backends.kling_model_path import KlingModelPathVideoBackend
 from lib.backends.video_backends.openai import OpenAIVideoBackend
 from lib.backends.video_backends.vidu import ViduVideoBackend
 from tests.fakes import bounded_poll_clock
@@ -107,6 +109,9 @@ _CALLS: dict[str, Call] = {
     "dashscope-tts": lambda layer, tmp_path: DashScopeAudioBackend(
         api_key="k", base_url=BASE, transport_layer=layer
     ).synthesize(_speech(tmp_path)),
+    "dashscope-speech-synthesizer": lambda layer, tmp_path: DashScopeSpeechSynthesizerBackend(
+        api_key="k", base_url=BASE, transport_layer=layer
+    ).synthesize(_speech(tmp_path)),
     "minimax-tts": lambda layer, tmp_path: MiniMaxAudioBackend(
         api_key="k", base_url=BASE, transport_layer=layer
     ).synthesize(_speech(tmp_path)),
@@ -130,6 +135,9 @@ _CALLS: dict[str, Call] = {
     ).generate(_video(tmp_path)),
     "kling-video-pro-silent": lambda layer, tmp_path: KlingVideoBackend(
         auth_mode="bearer", api_key="k", base_url=f"{BASE}/v1", transport_layer=layer
+    ).generate(_video(tmp_path)),
+    "kling-video-model-path": lambda layer, tmp_path: KlingModelPathVideoBackend(
+        api_key="k", base_url=BASE, transport_layer=layer
     ).generate(_video(tmp_path)),
 }
 

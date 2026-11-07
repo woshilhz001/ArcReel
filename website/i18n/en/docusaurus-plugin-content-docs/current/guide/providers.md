@@ -97,6 +97,8 @@ calls from places that still select it fail with an error that gives the shutdow
 Video tasks already submitted to the vendor before the shutdown date are not affected: when the service restarts and resumes them, their results are retrieved as usual. Tasks submitted after the shutdown date still fail, including tasks queued before it that only reach submission afterwards.
 Use "All / Enabled" to switch what is shown.
 
+Models that need a newer version of ArcReel are listed here too, at the end of their group, labelled "Requires ArcReel ≥ version". The current version cannot call them: the toggle is unavailable and the model settings cannot be opened, and they do not appear among any model candidates or serve as the provider's default model. After you upgrade to the required version, they can be enabled like any other model.
+
 In global and project settings, when a default model, a per-purpose model, or the narration model is set to a retiring or discontinued model,
 a notice below the dropdown gives the shutdown date and the officially recommended successor.
 When the successor is on the same provider and can be used in that place, the notice has a "Switch to …" button: it changes only that one selection,
@@ -416,7 +418,11 @@ High-reasoning models are not necessarily suitable for every task. Complex conte
 
 ## 9. TTS Configuration {#tts-providers}
 
-ArcReel's voice-over capability can use DashScope Qwen TTS, MiniMax Speech, Gemini TTS (AI Studio, Vertex), or a compatible TTS interface.
+ArcReel's voice-over capability can use DashScope Qwen TTS and qwen-audio TTS, MiniMax Speech, Gemini TTS (AI Studio, Vertex), or a compatible TTS interface.
+
+After you choose a TTS model in global settings or project settings, the narration voice field lists the common voices available for that model. For voices outside the list (cloned voices, for example), enter the voice ID from the provider docs.
+
+DashScope speech has two call endpoints: "Alibaba Model Studio (TTS)" calls Qwen TTS (`qwen3-tts` and similar), and "Alibaba Model Studio (qwen-audio TTS)" calls qwen-audio TTS (the `qwen-audio-3.0-tts` and `qwen-audio-3.1-tts` series). The two endpoints do not share voices, and each qwen-audio model only accepts its own voices; see the DashScope [voice list](https://help.aliyun.com/zh/model-studio/qwen-audio-tts-voice-list) for the full set. The qwen-audio endpoint supports narration speed from 0.5 to 2.0; values outside this range are sent as the nearest bound. When you add a model, names containing `qwen-audio` are prefilled with the qwen-audio endpoint and other DashScope speech models with the Qwen TTS endpoint; you can change this in [Model settings](#model-settings).
 
 After configuration, first validate:
 

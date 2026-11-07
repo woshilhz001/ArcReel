@@ -659,7 +659,7 @@ class TestTtsModelCapabilities:
     def test_model_not_in_catalog_asks_to_reselect(self, monkeypatch):
         """所选语音模型已不在供应商清单中：返回要求重新选择模型的 400，不说成「语音模型无效」。"""
         error = ModelNotInCatalogError(provider_id="minimax", model_id="speech-retired", media_type="audio")
-        monkeypatch.setattr(system_config_router, "audio_backend_capabilities", AsyncMock(side_effect=error))
+        monkeypatch.setattr(system_config_router, "audio_backend_profile", AsyncMock(side_effect=error))
         app = _make_app_with_mock(_make_mock_svc())
         register_error_handlers(app)
         with TestClient(app) as client:
